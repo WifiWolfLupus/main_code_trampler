@@ -1,0 +1,93 @@
+# Project ATLAS – Auto-Leveling Hexapod Testbed
+
+**Project ATLAS** (*Auto-leveling Testbed for Load-Bearing Articulated Superstructures*) is a custom-built 18-DOF hexapod robot designed as a technology demonstrator for stabilized payload transport across uneven terrain. Developed entirely from scratch over a 3-month period, the project encompasses full-stack mechanical CAD design, custom PCB engineering, and dual-core real-time firmware written in **Embedded Rust**.
+
+**[Watch the Demonstration Video](https://drive.google.com/file/d/1S2Hx6hAMKgyOhNaRciaC0PgEOIHzOwxt/view)**
+
+**[Further Information on LinkedIn under "Projects"](https://www.linkedin.com/in/christoph-wilflingseder-465780413/)**
+
+---
+
+## Tech Stack & Tools
+
+* **Firmware & RTOS:** Embedded Rust (`esp-idf-sys`), FreeRTOS (Dual-Core Task Isolation)
+* **Hardware & PCB Design:** KiCad, ESP32, 3-Axis Accelerometer (I2C), 18x High-Torque Metal Gear Servos
+* **Mechanical Engineering:** Solid Edge (CAD), Custom 3D-Printed Structural Components
+
+---
+
+## System Architecture
+
+```mermaid
+graph TD
+    subgraph Power_Domain ["Power Management Domain"]
+        BAT["Heavy-Duty Power Tool Battery"]
+        BUCK_HV["20A High-Current Buck Converter (Actively Cooled)"]
+        BUCK_LV["Isolated Logic Buck Converter"]
+        BAT --> BUCK_HV
+        BAT --> BUCK_LV
+    end
+
+    subgraph Hardware_Layer ["Hardware & Peripherals"]
+        SERVOS["18x Metal-Gear Servos (Up to 3A Stall Current each)"]
+        IMU["3-Axis Accelerometer (I2C)"]
+        FEET["Spring-Loaded Feet & Contact Sensors"]
+        ESP2["2nd ESP32 (Remote Receiver)"]
+        LEDS["Onboard Lighting / LEDs"]
+    end
+
+    subgraph ESP32_SoC ["Main ESP32 Dual-Core Firmware (Rust / FreeRTOS)"]
+        subgraph Core_0 ["Core 0: System Control & Stabilization"]
+            CTRL["Controller Task (Main State Machine)"]
+            PD["Dual Velocity-Based PD Controllers (Auto-Leveling)"]
+            CTRL <-->|Sensor Data / Leveling Offsets - Auto Mode| PD
+        end
+        subgraph Core_1 ["Core 1: Real-Time Kinematics & Hardware I/O"]
+            GAIT["Gait Engine & Foot Target Generator"]
+            IK["Inverse Kinematics Solver"]
+            HW["Hardware Task & Selective I2C Polling (EMI Mitigation)"]
+        end
+    end
+
+    BUCK_HV ==>|High-Current Rail| SERVOS
+    BUCK_LV -->|Clean Logic Rail| ESP32_SoC
+    BUCK_LV -->|Clean Logic Rail| IMU
+
+    %% Hardware Interactions (Exclusively via Core 1 Hardware Task)
+    ESP2 -->|UART / Serial User Inputs| HW
+    IMU -->|I2C Bus| HW
+    FEET -->|GPIO| HW
+    HW ==>|PWM Signals| SERVOS
+    HW -->|GPIO / Control| LEDS
+
+    %% Inter-Core & Internal Data Flow
+    HW -->|Sensor Data & UART User Commands| CTRL
+    CTRL -->|Movement Commands| GAIT
+    CTRL -->|LED & Mode Commands| HW
+    GAIT --> IK
+    IK -->|Joint Angles| HW
+```
+
+---
+
+## Key Engineering Highlights
+
+### 1. Mechanical Design & Kinematics Optimization
+The chassis was engineered for maximum structural rigidity at minimal weight. Limb segment lengths (Coxa, Femur, Tibia) were mathematically optimized to balance the trade-off between required servo torque and overall workspace/range of motion. Each foot features mechanical suspension, articulated ground-contact pads, and tactile contact sensors for terrain adaptation.
+
+### 2. High-Current Power Management & Brownout Prevention
+Driving 18 metal-gear servos (with a stall current of up to 3A per actuator) places extreme demands on the power distribution network:
+* **Actuator Rail:** Powered by a high-discharge power tool battery stepped down via an actively cooled 20A buck converter.
+* **Logic Isolation:** To prevent microcontroller brownouts and system resets caused by massive transient current spikes during rapid gait transitions, the ESP32 and sensor logic are completely decoupled via a dedicated, isolated buck converter.
+
+### 3. Dual-Core RTOS Firmware Architecture (Embedded Rust)
+Built on top of `esp-idf-sys` and FreeRTOS, the firmware strictly partitions execution across both ESP32 cores to guarantee deterministic real-time performance:
+* **Core 1 (Isolated Real-Time Engine):** Exclusively handles timing-critical inverse kinematics (IK) calculations and the gait engine. Also hosts the Hardware-Task to perform all hardware-interactions
+* **Core 0 (Control & Comms):** Hosts the central Controller task (Main State Machine for robot behaviour). Velocity-based PD controllers process 3-axis accelerometer data to compute compensatory body tilts for the automatic leveling mode, which are integrated into the final foot target positions. Converts all user inputs into corresponding movement commands and sends them to the Core 1 tasks.
+
+Additionally, to outsource the bluetooth controller interactions, a second ESP32 transmits the user inputs periodically to the main ESP via UART
+
+### 4. Software-Defined EMI Mitigation (I2C Bus Protection)
+**The Challenge:** During heavy multi-axis movement, strong electromagnetic interference (EMI) generated by the 18 servo motors induced current spikes into the sensitive I2C sensor lines, causing frequent bus lockups and sensor crashes.
+
+**The Solution:** Resolved entirely in software without requiring a PCB redesign. By deactivating I2C polling during moments of peak servo activity (Mode change commands from the Controller to the Hardware Task), the I2C crashes were reduced close to zero.

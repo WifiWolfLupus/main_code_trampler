@@ -1,0 +1,46 @@
+dependencies:
+  bluepad32:
+    component_hash: dcfe630feaa1c8b53cb92ae39c384f35f272d03c2e9435bd813ffb20b20e259c
+    dependencies:
+    - name: idf
+      version: '>=4.1.0'
+    source:
+      git: https://github.com/ricardoquesada/bluepad32.git
+      path: src/components/bluepad32
+      type: git
+    version: e9b755faabc240585da42e6d26164bb2cdd064d3
+  btstack:
+    component_hash: 33614a5fca128635ebefa4c6c02d3997c36a7e7b79cb9385f9dad8fe342e7bb8
+    dependencies:
+    - name: espressif/esp_wifi_remote
+      rules:
+      - if: target in [esp32p4, esp32h2]
+      version: '*'
+    - name: espressif/esp_hosted
+      rules:
+      - if: target in [esp32p4, esp32h2]
+      version: ~1
+    source:
+      git: https://github.com/bluekitchen/btstack.git
+      path: port/esp32/components/btstack
+      type: git
+    version: 431d58d5613fd8fae38afe50282b25302de84bf7
+  btstack_config:
+    component_hash: 5be4b213cd9de6559a0a4bec774e594f6067f3bc3cb60318ead0750ba73d4d09
+    dependencies: []
+    source:
+      git: https://github.com/bluekitchen/btstack.git
+      path: port/esp32/components/btstack_config
+      type: git
+    version: 431d58d5613fd8fae38afe50282b25302de84bf7
+  idf:
+    source:
+      type: idf
+    version: 5.5.3
+direct_dependencies:
+- bluepad32
+- btstack
+- btstack_config
+manifest_hash: 4874ed6c9771262cf277dc2f55806f96a75d54c4ff948d626bbb75688ba8493c
+target: esp32
+version: 2.0.0
